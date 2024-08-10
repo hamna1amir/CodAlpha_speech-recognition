@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Emotion Recognition from Speech</title>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.3/css/all.min.css" rel="stylesheet">
+    <style>
+        :root {
+            --primary-color: #3498db;
+            --secondary-color: #2980b9;
+            --text-color: #333;
+            --background-color: #f5f5f5;
+            --card-background: #ffffff;
+        }
+
+        body {
+            font-family: 'Arial', sans-serif;
+            background-color: var(--background-color);
+            color: var(--text-color);
+            margin: 0;
+            padding: 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+        }
+
+        .container {
+            background-color: var(--card-background);
+            border-radius: 8px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            padding: 2rem;
+            width: 90%;
+            max-width: 500px;
+        }
+
+        h1 {
+            color: var(--primary-color);
+            text-align: center;
+            margin-bottom: 1.5rem;
+        }
+
+        .controls {
+            display: flex;
+            justify-content: center;
+            gap: 1rem;
+            margin-bottom: 1.5rem;
+        }
+
+        button {
+            background-color: var(--primary-color);
+            color: white;
+            border: none;
+            padding: 0.75rem 1.5rem;
+            font-size: 1rem;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: background-color 0.3s ease;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        button:hover {
+            background-color: var(--secondary-color);
+        }
+
+        button:disabled {
+            background-color: #ccc;
+            cursor: not-allowed;
+        }
+
+        .result {
+            background-color: #e8f4fd;
+            border: 1px solid #bde0fe;
+            border-radius: 4px;
+            padding: 1rem;
+            text-align: center;
+            font-size: 1.2rem;
+            margin-bottom: 1.5rem;
+        }
+
+        .emotion-icon {
+            font-size: 3rem;
+            margin-bottom: 0.5rem;
+        }
+
+        .visualizer {
+            width: 100%;
+            height: 100px;
+            background-color: #f0f0f0;
+            border-radius: 4px;
+            overflow: hidden;
+            position: relative;
+        }
+
+        .visualizer-bar {
+            position: absolute;
+            bottom: 0;
+            width: 4px;
+            background-color: var(--primary-color);
+            transition: height 0.1s ease;
+        }
+
+        @keyframes pulse {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.1); }
+            100% { transform: scale(1); }
+        }
+
+        .recording .emotion-icon {
+            color: #e74c3c;
+            animation: pulse 1s infinite;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Emotion Recognition from Speech</h1>
+        <div class="controls">
+            <button id="startRecording">
+                <i class="fas fa-microphone"></i> Start Recording
+            </button>
+            <button id="stopRecording" disabled>
+                <i class="fas fa-stop"></i> Stop Recording
+            </button>
+        </div>
+        <div class="result">
+            <div class="emotion-icon">
+                <i class="fas fa-meh"></i>
+            </div>
+            <div id="emotionResult">No emotion detected yet</div>
+        </div>
+        <div class="visualizer" id="visualizer"></div>
+    </div>
+
+    <script>
+        let mediaRecorder;
+        let audioChunks = [];
+        let audioContext;
+        let analyser;
+        let dataArray;
+        let isRecording = false;
+
+        const startButton = document.getElementById('startRecording');
+        const stopButton = document.getElementById('stopRecording');
+        const emotionResult = document.getElementById('emotionResult');
+        const emotionIcon = document.querySelector('.emotion-icon i');
+        const visualizer = document.getElementById('visualizer');
+
+        startButton.onclick = startRecording;
+        stopButton.onclick = stopRecording;
+
+        async function startRecording() {
+            const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+            mediaRecorder = new MediaRecorder(stream);
+            audioChunks = [];
+
+            mediaRecorder.ondataavailable = (event) => {
+                audioChunks.push(event.data);
+            };
+
+            mediaRecorder.onstop = () => {
+                const audioBlob = new Blob(audioChunks, { type: 'audio/wav' });
+                simulateEmotionRecognition();
+            };
+
+            mediaRecorder.start();
+            isRecording = true;
+            startButton.disabled = true;
+            stopButton.disabled = false;
+            document.querySelector('.emotion-icon').classList.add('recording');
+
+            // Set up audio visualizer
+            audioContext = new (window.AudioContext || window.webkitAudioContext)();
+            analyser = audioContext.createAnalyser();
+            const source = audioContext.createMediaStreamSource(stream);
+            source.connect(analyser);
+            analyser.fftSize = 256;
+            const bufferLength = analyser.frequencyBinCount;
+            dataArray = new Uint8Array(bufferLength);
+
+            visualizeAudio();
+        }
+
+        function stopRecording() {
+            mediaRecorder.stop();
+            isRecording = false;
+            startButton.disabled = false;
+            stopButton.disabled = true;
+            document.querySelector('.emotion-icon').classList.remove('recording');
+        }
+
+        function visualizeAudio() {
+            if (!isRecording) return;
+
+            analyser.getByteFrequencyData(dataArray);
+            visualizer.innerHTML = '';
+
+            for (let i = 0; i < dataArray.length; i++) {
+                const bar = document.createElement('div');
+                bar.classList.add('visualizer-bar');
+                bar.style.left = `${i * 4}px`;
+                bar.style.height = `${dataArray[i] / 2}px`;
+                visualizer.appendChild(bar);
+            }
+
+            requestAnimationFrame(visualizeAudio);
+        }
+
+        function simulateEmotionRecognition() {
+            const emotions = [
+                { name: 'happiness', icon: 'fa-smile' },
+                { name: 'sadness', icon: 'fa-sad-tear' },
+                { name: 'anger', icon: 'fa-angry' },
+                { name: 'fear', icon: 'fa-frown-open' },
+                { name: 'surprise', icon: 'fa-surprise' }
+            ];
+            const randomEmotion = emotions[Math.floor(Math.random() * emotions.length)];
+            emotionResult.textContent = `Detected Emotion: ${randomEmotion.name}`;
+            emotionIcon.className = `fas ${randomEmotion.icon}`;
+        }
+    </script>
+</body>
+</html>
